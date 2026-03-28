@@ -1,6 +1,6 @@
 # ponaflow
 
-ponaflow is a minimalist web client/API orchestration engine for multi-step workflows served as a github repo template. It relies on one central configuration file and an regulated directory structure. 
+ponaflow is a minimalist web client/API orchestration engine for multi-step workflows served as a github repo template. 
 
 # Key features
 

@@ -1,10 +1,5 @@
 import fs from "node:fs";
-import path from "node:path";
-import {
-  CONFIG_PATH,
-  resolveProjectDataPath,
-  resolveStaticPath,
-} from "./paths.js";
+import { CONFIG_PATH, resolveStaticPath } from "./paths.js";
 
 function readJsonIfExists(filePath) {
   if (!filePath || !fs.existsSync(filePath)) return { ok: false, error: "missing" };
@@ -91,12 +86,12 @@ export function validateConfig(config) {
     if (p.page_html === project.landing_page) landingMatched = true;
 
     if (p.submission_package) {
-      const sp = resolveProjectDataPath(p.submission_package);
+      const sp = resolveStaticPath(p.submission_package);
       const j = readJsonIfExists(sp);
       if (!j.ok) errors.push(`page ${p.slug}: submission_package invalid: ${p.submission_package} (${j.error})`);
     }
     if (p.response_schema) {
-      const rp = resolveProjectDataPath(p.response_schema);
+      const rp = resolveStaticPath(p.response_schema);
       const j = readJsonIfExists(rp);
       if (!j.ok) errors.push(`page ${p.slug}: response_schema invalid: ${p.response_schema} (${j.error})`);
     }
@@ -133,14 +128,14 @@ export function validateConfig(config) {
     }
 
     if (a.submission_package) {
-      const sp = resolveProjectDataPath(a.submission_package);
+      const sp = resolveStaticPath(a.submission_package);
       const j = readJsonIfExists(sp);
       if (!j.ok) {
         errors.push(`action_element ${a.id}: submission_package invalid (${j.error})`);
       }
     }
     if (a.response_schema) {
-      const rp = resolveProjectDataPath(a.response_schema);
+      const rp = resolveStaticPath(a.response_schema);
       const j = readJsonIfExists(rp);
       if (!j.ok) {
         errors.push(`action_element ${a.id}: response_schema invalid (${j.error})`);

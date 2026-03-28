@@ -1,0 +1,10 @@
+{
+  "status": {
+    "required": false,
+    "default": "ok"
+  },
+  "message": {
+    "required": false,
+    "default": "Thank you."
+  }
+}

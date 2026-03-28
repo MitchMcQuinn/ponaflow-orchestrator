@@ -1,0 +1,14 @@
+{
+  "page.titles.title_A": {
+    "required": false,
+    "default": "Welcome"
+  },
+  "page.titles.title_B": {
+    "required": false,
+    "default": "Overview"
+  },
+  "page.body": {
+    "required": false,
+    "default": "This page contains introductory content."
+  }
+}

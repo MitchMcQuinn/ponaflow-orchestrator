@@ -1,35 +1,39 @@
 {
-    "project": [
-      {
-        "name": "Sample Project",
-        "landing_page": "project-code/html/landing.html",
-        "webhook_url": "https://n8n.mitchiecraft.com/webhook/92c7cad7-108d-474f-8116-ed61bd5cf355",
-        "page": [
-          {
-            "slug": "*",
-            "page_html": "project-code/html/landing.html",
-            "action_element": [
-              {
-                "id": "form-contact-start",
-                "destination": "project-code/html/thank-you.html",
-                "submission_package": "/sample/submission-step1.json",
-                "response_schema": "/sample/response-schema.json"
-              }
-            ]
-          },
-          {
-            "slug": "*",
-            "page_html": "project-code/html/thank-you.html",
-            "action_element": [
-              {
-                "id": "form-contact-start",
-                "destination": "project-code/html/thank-you.html",
-                "submission_package": "/sample/submission-step1.json",
-                "response_schema": "/sample/response-schema.json"
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  }
+  "project": [
+    {
+      "name": "Sample Project",
+      "landing_page": "html/landing.html",
+      "webhook_url": "https://n8n.mitchiecraft.com/webhook/92c7cad7-108d-474f-8116-ed61bd5cf355",
+      "page": [
+        {
+          "slug": "/home",
+          "page_html": "html/landing.html",
+          "submission_package": "json/submission/landing-page.json",
+          "response_schema": "json/response-schema/landing-page.json"
+        },
+        {
+          "slug": "/thank-you",
+          "page_html": "html/thank-you.html",
+          "submission_package": "json/submission/step1.json",
+          "response_schema": "json/response-schema/thank-you.json"
+        }
+      ],
+      "action_element": [
+        {
+          "id": "contact-form",
+          "immediate": false,
+          "destination": "/thank-you",
+          "submission_package": "json/submission/step1.json",
+          "response_schema": "json/response-schema/thank-you.json"
+        },
+        {
+          "id": "form-contact-start",
+          "immediate": true,
+          "destination": "/thank-you",
+          "submission_package": "json/submission/step1.json",
+          "response_schema": "json/response-schema/thank-you.json"
+        }
+      ]
+    }
+  ]
+}

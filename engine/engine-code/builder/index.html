@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ponaflow builder</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 56rem;
+        margin: 1.5rem auto;
+        padding: 0 1rem;
+        line-height: 1.45;
+      }
+      fieldset {
+        margin: 1rem 0;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+      }
+      legend {
+        padding: 0 0.35rem;
+        font-weight: 600;
+      }
+      label {
+        display: grid;
+        gap: 0.2rem;
+        margin: 0.5rem 0;
+        font-size: 0.9rem;
+      }
+      input[type="text"],
+      input[type="url"],
+      select {
+        font: inherit;
+        padding: 0.35rem 0.5rem;
+      }
+      .row {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .card {
+        border: 1px dashed #bbb;
+        padding: 0.75rem;
+        margin: 0.5rem 0;
+        border-radius: 6px;
+      }
+      .errors {
+        background: #fff4f4;
+        border: 1px solid #f3b4b4;
+        padding: 0.75rem;
+        border-radius: 6px;
+        white-space: pre-wrap;
+      }
+      .ok {
+        background: #f2fff4;
+        border: 1px solid #9bd5a8;
+        padding: 0.75rem;
+        border-radius: 6px;
+      }
+      button {
+        font: inherit;
+        cursor: pointer;
+        padding: 0.4rem 0.75rem;
+      }
+      .hint {
+        font-size: 0.85rem;
+        color: #444;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>ponaflow builder</h1>
+    <p>Edit the project structure, then validate against the same rules as the server startup check.</p>
+
+    <div class="row" style="margin-bottom: 1rem">
+      <button type="button" id="loadSanitized">Load from server (GET /api/config)</button>
+      <span class="hint"
+        >Webhook URL is not returned by the API; enter it below before validating.</span
+      >
+    </div>
+
+    <form id="builder">
+      <fieldset>
+        <legend>Project</legend>
+        <label
+          >Name
+          <input type="text" name="name" required />
+        </label>
+        <label
+          >Landing page
+          <select name="landing_page" id="landing_page" class="pick-html" required></select>
+        </label>
+        <span class="hint">HTML files from <code>project/project-code/html/</code>. Use + New to create a scaffold.</span>
+        <label
+          >Webhook URL
+          <input type="url" name="webhook_url" placeholder="https://example.com/webhook" required />
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Pages</legend>
+        <div id="pages"></div>
+        <button type="button" id="addPage">Add page</button>
+      </fieldset>
+
+      <fieldset>
+        <legend>Action elements</legend>
+        <div id="actions"></div>
+        <button type="button" id="addAction">Add action</button>
+      </fieldset>
+
+      <div class="row" style="margin-top: 1rem">
+        <button type="submit">Validate</button>
+      </div>
+    </form>
+
+    <section id="result" style="margin-top: 1rem" hidden></section>
+
+    <script>
+      const pagesEl = document.getElementById("pages");
+      const actionsEl = document.getElementById("actions");
+      const resultEl = document.getElementById("result");
+      const form = document.getElementById("builder");
+      const landingSelect = document.getElementById("landing_page");
+
+      let RES = { html: [], submission: [], responseSchema: [] };
+
+      async function refreshResources() {
+        const r = await fetch("/api/builder/resources");
+        RES = await r.json();
+      }
+
+      function repopulateSelect(select, list, current, optional) {
+        const want = current !== undefined && current !== null ? String(current) : select.value;
+        select.innerHTML = "";
+        if (optional) {
+          const o = document.createElement("option");
+          o.value = "";
+          o.textContent = "(none)";
+          select.appendChild(o);
+        }
+        for (const p of list) {
+          const o = document.createElement("option");
+          o.value = p;
+          o.textContent = p;
+          select.appendChild(o);
+        }
+        if (want && want !== "__new__" && !list.includes(want)) {
+          const o = document.createElement("option");
+          o.value = want;
+          o.textContent = want + " (not on disk)";
+          select.appendChild(o);
+        }
+        const nu = document.createElement("option");
+        nu.value = "__new__";
+        nu.textContent = "+ New…";
+        select.appendChild(nu);
+        if (want && want !== "__new__") select.value = want;
+        else if (optional) select.value = "";
+        else if (list.length) select.value = list[0];
+        else select.value = "";
+      }
+
+      function rebindAllPicks() {
+        document.querySelectorAll("select.pick-html").forEach((sel) => {
+          const cur = sel.value === "__new__" ? "" : sel.value;
+          repopulateSelect(sel, RES.html, cur, false);
+        });
+        document.querySelectorAll("select.pick-submission").forEach((sel) => {
+          const cur = sel.value === "__new__" ? "" : sel.value;
+          repopulateSelect(sel, RES.submission, cur, true);
+        });
+        document.querySelectorAll("select.pick-response").forEach((sel) => {
+          const cur = sel.value === "__new__" ? "" : sel.value;
+          repopulateSelect(sel, RES.responseSchema, cur, true);
+        });
+        document.querySelectorAll("select.pick-dest-html").forEach((sel) => {
+          const cur = sel.value === "__new__" ? "" : sel.value;
+          repopulateSelect(sel, RES.html, cur, false);
+        });
+      }
+
+      async function wireNewHtmlSelect(select) {
+        select.addEventListener("change", async () => {
+          if (select.value !== "__new__") return;
+          const stem = window.prompt("New page base name (letters, numbers, _ or -; no .html):");
+          if (!stem) {
+            rebindAllPicks();
+            return;
+          }
+          const res = await fetch("/api/builder/create-html", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: stem }),
+          });
+          const j = await res.json();
+          if (!j.ok || !j.path) {
+            window.alert(j.error || "Could not create page");
+            rebindAllPicks();
+            return;
+          }
+          await refreshResources();
+          rebindAllPicks();
+          select.value = j.path;
+        });
+      }
+
+      async function wireNewJsonSelect(select, kind) {
+        select.addEventListener("change", async () => {
+          if (select.value !== "__new__") return;
+          const stem = window.prompt(
+            "New JSON base name (letters, numbers, _ or -; no .json). File is seeded as {}:"
+          );
+          if (!stem) {
+            rebindAllPicks();
+            return;
+          }
+          const res = await fetch("/api/builder/create-json", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ kind, name: stem }),
+          });
+          const j = await res.json();
+          if (!j.ok || !j.path) {
+            window.alert(j.error || "Could not create file");
+            rebindAllPicks();
+            return;
+          }
+          await refreshResources();
+          rebindAllPicks();
+          select.value = j.path;
+        });
+      }
+
+      function pageCard(d) {
+        const data = d || {};
+        const el = document.createElement("div");
+        el.className = "card";
+        el.innerHTML = `
+          <div class="row" style="justify-content:space-between">
+            <strong>Page</strong>
+            <button type="button" class="remove">Remove</button>
+          </div>
+          <label>slug <input type="text" class="slug" placeholder="/home" /></label>
+          <label>page HTML <select class="pick-html page-html"></select></label>
+          <label>submission package (optional) <select class="pick-submission sub-pkg"></select></label>
+          <label>response schema (optional) <select class="pick-response resp-sch"></select></label>
+        `;
+        el.querySelector(".slug").value = data.slug || "";
+        el.querySelector(".remove").addEventListener("click", () => el.remove());
+
+        const h = el.querySelector(".page-html");
+        const s = el.querySelector(".sub-pkg");
+        const r = el.querySelector(".resp-sch");
+        repopulateSelect(h, RES.html, data.page_html || "", false);
+        repopulateSelect(s, RES.submission, data.submission_package || "", true);
+        repopulateSelect(r, RES.responseSchema, data.response_schema || "", true);
+        wireNewHtmlSelect(h);
+        wireNewJsonSelect(s, "submission");
+        wireNewJsonSelect(r, "response-schema");
+        return el;
+      }
+
+      function syncDestVisibility(card) {
+        const mode = card.querySelector(".dest-mode").value;
+        const slugRow = card.querySelector(".dest-slug-wrap");
+        const htmlRow = card.querySelector(".dest-html-wrap");
+        const isSlug = mode === "slug";
+        slugRow.style.display = isSlug ? "" : "none";
+        htmlRow.style.display = isSlug ? "none" : "";
+      }
+
+      function actionCard(d) {
+        const data = d || {};
+        const el = document.createElement("div");
+        el.className = "card";
+        el.innerHTML = `
+          <div class="row" style="justify-content:space-between">
+            <strong>Action</strong>
+            <button type="button" class="remove">Remove</button>
+          </div>
+          <label>id <input type="text" class="id" /></label>
+          <label class="row"><input type="checkbox" class="immediate" /> immediate (uncheck for batched form)</label>
+          <label>destination
+            <select class="dest-mode">
+              <option value="slug">Route slug (e.g. /thank-you)</option>
+              <option value="html">HTML file under project-code</option>
+            </select>
+          </label>
+          <label class="dest-slug-wrap">slug / path
+            <input type="text" class="dest-slug" placeholder="/thank-you" />
+          </label>
+          <label class="dest-html-wrap">page HTML
+            <select class="pick-html pick-dest-html dest-html"></select>
+          </label>
+          <label>submission package (optional) <select class="pick-submission act-sub"></select></label>
+          <label>response schema (optional) <select class="pick-response act-resp"></select></label>
+        `;
+        el.querySelector(".remove").addEventListener("click", () => el.remove());
+        el.querySelector(".immediate").checked = data.immediate !== false;
+        el.querySelector(".id").value = data.id || "";
+
+        const dest = data.destination || "";
+        const modeSel = el.querySelector(".dest-mode");
+        const slugInp = el.querySelector(".dest-slug");
+        const htmlSel = el.querySelector(".dest-html");
+        if (dest.startsWith("/")) {
+          modeSel.value = "slug";
+          slugInp.value = dest;
+        } else if (dest) {
+          modeSel.value = "html";
+          repopulateSelect(htmlSel, RES.html, dest, false);
+        } else {
+          modeSel.value = "slug";
+          slugInp.value = "";
+          repopulateSelect(htmlSel, RES.html, "", false);
+        }
+        modeSel.addEventListener("change", () => syncDestVisibility(el));
+        syncDestVisibility(el);
+        wireNewHtmlSelect(htmlSel);
+
+        const s = el.querySelector(".act-sub");
+        const r = el.querySelector(".act-resp");
+        repopulateSelect(s, RES.submission, data.submission_package || "", true);
+        repopulateSelect(r, RES.responseSchema, data.response_schema || "", true);
+        wireNewJsonSelect(s, "submission");
+        wireNewJsonSelect(r, "response-schema");
+        return el;
+      }
+
+      function collect() {
+        const fd = new FormData(form);
+        const pages = [...pagesEl.querySelectorAll(".card")].map((c) => {
+          const p = {
+            slug: c.querySelector(".slug").value.trim(),
+            page_html: c.querySelector(".page-html").value.trim(),
+          };
+          const sp = c.querySelector(".sub-pkg").value.trim();
+          const rs = c.querySelector(".resp-sch").value.trim();
+          if (sp) p.submission_package = sp;
+          if (rs) p.response_schema = rs;
+          return p;
+        });
+        const action_element = [...actionsEl.querySelectorAll(".card")].map((c) => {
+          const mode = c.querySelector(".dest-mode").value;
+          const destination =
+            mode === "slug"
+              ? c.querySelector(".dest-slug").value.trim()
+              : c.querySelector(".dest-html").value.trim();
+          const a = {
+            id: c.querySelector(".id").value.trim(),
+            immediate: c.querySelector(".immediate").checked,
+            destination,
+          };
+          const sp = c.querySelector(".act-sub").value.trim();
+          const rs = c.querySelector(".act-resp").value.trim();
+          if (sp) a.submission_package = sp;
+          if (rs) a.response_schema = rs;
+          return a;
+        });
+        return {
+          project: [
+            {
+              name: fd.get("name").trim(),
+              landing_page: fd.get("landing_page").trim(),
+              webhook_url: fd.get("webhook_url").trim(),
+              page: pages,
+              action_element,
+            },
+          ],
+        };
+      }
+
+      function showResult(v) {
+        resultEl.hidden = false;
+        if (v.ok) {
+          resultEl.className = "ok";
+          resultEl.textContent = "Config is valid.";
+        } else {
+          resultEl.className = "errors";
+          resultEl.textContent = (v.errors || []).join("\n");
+        }
+      }
+
+      document.getElementById("addPage").addEventListener("click", () => pagesEl.appendChild(pageCard({})));
+      document.getElementById("addAction").addEventListener("click", () => actionsEl.appendChild(actionCard({})));
+
+      document.getElementById("loadSanitized").addEventListener("click", async () => {
+        resultEl.hidden = true;
+        await refreshResources();
+        const r = await fetch("/api/config");
+        const cfg = await r.json();
+        const p = cfg.project[0];
+        if (!p) return;
+        repopulateSelect(landingSelect, RES.html, p.landing_page || "", false);
+        form.querySelector('[name="name"]').value = p.name || "";
+        form.querySelector('[name="webhook_url"]').value = "";
+        pagesEl.innerHTML = "";
+        actionsEl.innerHTML = "";
+        (p.page || []).forEach((x) => pagesEl.appendChild(pageCard(x)));
+        (p.action_element || []).forEach((x) => actionsEl.appendChild(actionCard(x)));
+      });
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        resultEl.hidden = true;
+        const body = collect();
+        const res = await fetch("/api/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const v = await res.json();
+        showResult(v);
+      });
+
+      (async function init() {
+        await refreshResources();
+        repopulateSelect(landingSelect, RES.html, "html/landing.html", false);
+        wireNewHtmlSelect(landingSelect);
+
+        pagesEl.appendChild(
+          pageCard({
+            slug: "/home",
+            page_html: "html/landing.html",
+            submission_package: "json/submission/landing-page.json",
+            response_schema: "json/response-schema/landing-page.json",
+          })
+        );
+        pagesEl.appendChild(
+          pageCard({
+            slug: "/thank-you",
+            page_html: "html/thank-you.html",
+            submission_package: "json/submission/step1.json",
+            response_schema: "json/response-schema/thank-you.json",
+          })
+        );
+        actionsEl.appendChild(
+          actionCard({
+            id: "contact-form",
+            immediate: false,
+            destination: "/thank-you",
+            submission_package: "json/submission/step1.json",
+            response_schema: "json/response-schema/thank-you.json",
+          })
+        );
+        actionsEl.appendChild(
+          actionCard({
+            id: "form-contact-start",
+            immediate: true,
+            destination: "/thank-you",
+            submission_package: "json/submission/step1.json",
+            response_schema: "json/response-schema/thank-you.json",
+          })
+        );
+        form.querySelector('[name="name"]').value = "Sample Project";
+        form.querySelector('[name="webhook_url"]').value = "https://example.com/hook";
+      })();
+    </script>
+  </body>
+</html>

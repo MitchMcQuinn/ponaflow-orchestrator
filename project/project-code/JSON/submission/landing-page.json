@@ -1,0 +1,10 @@
+{
+  "page": {
+    "context": "landing",
+    "titles": {
+      "title_A": "Welcome",
+      "title_B": "Getting started"
+    },
+    "body": "This page contains introductory content."
+  }
+}
