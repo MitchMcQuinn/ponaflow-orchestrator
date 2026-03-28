@@ -1,0 +1,15 @@
+{
+  "name": "ponaflow-orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node engine/engine-code/server.js",
+    "dev": "node engine/engine-code/server.js",
+    "validate": "node engine/engine-code/cli/validate.js",
+    "test": "node --test tests/"
+  }
+}

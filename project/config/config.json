@@ -1,0 +1,35 @@
+{
+    "project": [
+      {
+        "name": "Sample Project",
+        "landing_page": "project-code/html/landing.html",
+        "webhook_url": "https://n8n.mitchiecraft.com/webhook/92c7cad7-108d-474f-8116-ed61bd5cf355",
+        "page": [
+          {
+            "slug": "*",
+            "page_html": "project-code/html/landing.html",
+            "action_element": [
+              {
+                "id": "form-contact-start",
+                "destination": "project-code/html/thank-you.html",
+                "submission_package": "/sample/submission-step1.json",
+                "response_schema": "/sample/response-schema.json"
+              }
+            ]
+          },
+          {
+            "slug": "*",
+            "page_html": "project-code/html/thank-you.html",
+            "action_element": [
+              {
+                "id": "form-contact-start",
+                "destination": "project-code/html/thank-you.html",
+                "submission_package": "/sample/submission-step1.json",
+                "response_schema": "/sample/response-schema.json"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
